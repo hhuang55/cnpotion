@@ -99,13 +99,18 @@ def create_bottle_plan(
 ) -> List[PotionMixes]:
     # TODO: Create a real bottle plan logic
     plan = []
+    
+    if red_ml >= 100:
+        red_potion_qty = min(red_ml // 100, maximum_potion_capacity)
+        plan.append(PotionMixes(potion_type=[100, 0, 0, 0], quantity=red_potion_qty))
 
-    if red_ml >= 500:
-        plan.append(PotionMixes(potion_type=[100, 0, 0, 0], quantity=5))
-    elif green_ml >= 500:
-        plan.append(PotionMixes(potion_type=[0, 100, 0, 0], quantity=5))
-    elif blue_ml >= 500:
-        plan.append(PotionMixes(potion_type=[0, 0, 100, 0], quantity=5))
+    if green_ml >= 100:
+        green_potion_qty = min(green_ml // 100, maximum_potion_capacity)
+        plan.append(PotionMixes(potion_type=[0, 100, 0, 0], quantity=green_potion_qty))
+
+    if blue_ml >= 100:
+        blue_potion_qty = min(blue_ml // 100, maximum_potion_capacity)
+        plan.append(PotionMixes(potion_type=[0, 0, 100, 0], quantity=blue_potion_qty))
 
     return plan
 
