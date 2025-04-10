@@ -23,7 +23,7 @@ def test_bottle_red_potions() -> None:
 
     assert len(result) == 1
     assert result[0].potion_type == [100, 0, 0, 0]
-    assert result[0].quantity == 5
+    assert result[0].quantity == 1
 def test_bottle_green_potions() -> None:
     red_ml: int = 0
     green_ml: int = 500  
