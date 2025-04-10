@@ -34,8 +34,8 @@ def create_catalog() -> List[CatalogItem]:
 
         if result.red_potions > 0:
             catalog.append(CatalogItem(
-                sku="RED_POTION",
-                name="Red Potion",
+                sku="RED_POTION_0",
+                name="red potion",
                 quantity=result.red_potions,
                 price=50,
                 potion_type=[100, 0, 0, 0]
@@ -43,8 +43,8 @@ def create_catalog() -> List[CatalogItem]:
 
         if result.green_potions > 0:
             catalog.append(CatalogItem(
-                sku="GREEN_POTION",
-                name="Green Potion",
+                sku="GREEN_POTION_0",
+                name="green potion",
                 quantity=result.green_potions,
                 price=50,
                 potion_type=[0, 100, 0, 0]
@@ -52,8 +52,8 @@ def create_catalog() -> List[CatalogItem]:
 
         if result.blue_potions > 0:
             catalog.append(CatalogItem(
-                sku="BLUE_POTION",
-                name="Blue Potion",
+                sku="BLUE_POTION_0",
+                name="blue potion",
                 quantity=result.blue_potions,
                 price=50,
                 potion_type=[0, 0, 100, 0]
