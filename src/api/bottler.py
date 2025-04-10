@@ -98,13 +98,16 @@ def create_bottle_plan(
     current_potion_inventory: List[PotionMixes],
 ) -> List[PotionMixes]:
     # TODO: Create a real bottle plan logic
-    return [
-        PotionMixes(
-            potion_type=[100, 0, 0, 0],
-            quantity=5,
-        )
-    ]
+    plan = []
 
+    if red_ml >= 500:
+        plan.append(PotionMixes(potion_type=[100, 0, 0, 0], quantity=5))
+    elif green_ml >= 500:
+        plan.append(PotionMixes(potion_type=[0, 100, 0, 0], quantity=5))
+    elif blue_ml >= 500:
+        plan.append(PotionMixes(potion_type=[0, 0, 100, 0], quantity=5))
+
+    return plan
 
 @router.post("/plan", response_model=List[PotionMixes])
 def get_bottle_plan():
