@@ -4,6 +4,9 @@ from typing import List, Annotated
 
 router = APIRouter()
 
+import sqlalchemy
+from src import database as db
+
 
 class CatalogItem(BaseModel):
     sku: Annotated[str, Field(pattern=r"^[a-zA-Z0-9_]{1,20}$")]
@@ -20,16 +23,43 @@ class CatalogItem(BaseModel):
 
 # Placeholder function, you will replace this with a database call
 def create_catalog() -> List[CatalogItem]:
-    return [
-        CatalogItem(
-            sku="RED_POTION_0",
-            name="red potion",
-            quantity=1,
-            price=50,
-            potion_type=[100, 0, 0, 0],
-        )
-    ]
+    with db.engine.begin() as connection:
+        result = connection.execute(
+            sqlalchemy.text("""
+                SELECT red_potions, green_potions, blue_potions FROM global_inventory
+            """)
+        ).first()
 
+        catalog = []
+
+        if result.red_potions > 0:
+            catalog.append(CatalogItem(
+                sku="RED_POTION",
+                name="Red Potion",
+                quantity=result.red_potions,
+                price=50,
+                potion_type=[100, 0, 0, 0]
+            ))
+
+        if result.green_potions > 0:
+            catalog.append(CatalogItem(
+                sku="GREEN_POTION",
+                name="Green Potion",
+                quantity=result.green_potions,
+                price=50,
+                potion_type=[0, 100, 0, 0]
+            ))
+
+        if result.blue_potions > 0:
+            catalog.append(CatalogItem(
+                sku="BLUE_POTION",
+                name="Blue Potion",
+                quantity=result.blue_potions,
+                price=50,
+                potion_type=[0, 0, 100, 0]
+            ))
+
+        return catalog
 
 @router.get("/catalog/", tags=["catalog"], response_model=List[CatalogItem])
 def get_catalog() -> List[CatalogItem]:

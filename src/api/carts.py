@@ -138,6 +138,12 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
     total_potions_bought = sum(carts[cart_id].values())
     total_gold_paid = total_potions_bought * 50  # Assuming each potion costs 50 gold
 
+    cart = carts[cart_id]
+
+    red_used = cart.get("RED_POTION", 0)
+    green_used = cart.get("GREEN_POTION", 0)
+    blue_used = cart.get("BLUE_POTION", 0)
+
     with db.engine.begin() as connection:
         row = connection.execute(
             sqlalchemy.text(
@@ -153,11 +159,18 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         connection.execute(
             sqlalchemy.text(
                 """
-                UPDATE global_inventory SET 
-                gold = :total_gold
+                UPDATE global_inventory
+                SET gold = gold + :gold,
+                red_potions = red_potions - :red_used,
+                green_potions = green_potions - :green_used,
+                blue_potions = blue_potions - :blue_used
+                
                 """
             ),
-            [{"total_gold": gold}],
+            {"gold": total_gold_paid,
+            "red_used": red_used,
+            "green_used": green_used,
+            "blue_used": blue_used},
         )
     # TODO: Deduct the right potions from inventory to the shop
 
