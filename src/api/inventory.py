@@ -36,14 +36,7 @@ def get_inventory():
         row = connection.execute(
             sqlalchemy.text(
                 """
-                SELECT 
-                    gold,
-                    red_ml,
-                    green_ml,
-                    blue_ml,
-                    red_potions,
-                    green_potions,
-                    blue_potions
+                SELECT *
                 FROM global_inventory
                 """
             )

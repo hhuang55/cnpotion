@@ -6,6 +6,7 @@ from typing import List
 import sqlalchemy
 from src.api import auth
 from src import database as db
+import random
 
 router = APIRouter(
     prefix="/barrels",
@@ -92,6 +93,7 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
               }
 
         )
+        
 
     pass
 
@@ -105,23 +107,47 @@ def create_barrel_plan(
     current_dark_ml: int,
     wholesale_catalog: List[Barrel],
 ) -> List[BarrelOrder]:
-    print(
-        f"gold: {gold}, max_barrel_capacity: {max_barrel_capacity}, current_red_ml: {current_red_ml}, current_green_ml: {current_green_ml}, current_blue_ml: {current_blue_ml}, current_dark_ml: {current_dark_ml}, wholesale_catalog: {wholesale_catalog}"
-    )
+    plan = []
+    
+    # Randomly pick a color 
+    colors = ['red', 'green', 'blue']
+    chosen_color = random.choice(colors)
 
-    # find cheapest red barrel
-    red_barrel = min(
-        (barrel for barrel in wholesale_catalog if barrel.potion_type[0] == 1),
-        key=lambda b: b.price,
-        default=None,
-    )
+    # Check inventory and price for the chosen color
+    if chosen_color == 'red':
+        if current_red_ml < 100:
+            red_barrel = min(
+                (barrel for barrel in wholesale_catalog if barrel.potion_type == [1.0, 0, 0, 0]),
+                key=lambda b: b.price,
+                default=None
+            )
 
-    # make sure we can afford it
-    if red_barrel and red_barrel.price <= gold:
-        return [BarrelOrder(sku=red_barrel.sku, quantity=1)]
+            if red_barrel and red_barrel.price <= gold:
+                plan.append(BarrelOrder(sku=red_barrel.sku, quantity=1))
 
-    # return an empty list if no affordable red barrel is found
-    return []
+    elif chosen_color == 'green':
+        if current_green_ml < 100:  # Fewer than 100 ml
+            green_barrel = min(
+                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 1.0, 0, 0]),
+                key=lambda b: b.price,
+                default=None
+            )
+
+            if green_barrel and green_barrel.price <= gold:
+                plan.append(BarrelOrder(sku=green_barrel.sku, quantity=1))
+
+    elif chosen_color == 'blue':
+        if current_blue_ml < 100:  # Fewer than 100 ml
+            blue_barrel = min(
+                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 1.0, 0]),
+                key=lambda b: b.price,
+                default=None
+            )
+
+            if blue_barrel and blue_barrel.price <= gold:
+                plan.append(BarrelOrder(sku=blue_barrel.sku, quantity=1))
+
+    return plan
 
 
 @router.post("/plan", response_model=List[BarrelOrder])

@@ -55,3 +55,4 @@ app.include_router(info.router)
 @app.get("/")
 async def root():
     return {"message": "Shop is open for business!"}
+
