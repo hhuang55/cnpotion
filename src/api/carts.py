@@ -173,8 +173,3 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
         total_potions_bought=total_potions_bought,
         total_gold_paid=total_gold_paid,
     )
-    # TODO: Deduct the right potions from inventory to the shop
-
-    return CheckoutResponse(
-        total_potions_bought=total_potions_bought, total_gold_paid=total_gold_paid
-    )
