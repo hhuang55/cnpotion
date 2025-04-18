@@ -128,50 +128,51 @@ class CartCheckout(BaseModel):
 
 @router.post("/{cart_id}/checkout", response_model=CheckoutResponse)
 def checkout(cart_id: int, cart_checkout: CartCheckout):
-    """
-    Handles the checkout process for a specific cart.
-    """
-
     if cart_id not in carts:
         raise HTTPException(status_code=404, detail="Cart not found")
 
-    total_potions_bought = sum(carts[cart_id].values())
-    total_gold_paid = total_potions_bought * 50  # Assuming each potion costs 50 gold
-
     cart = carts[cart_id]
-
-    red_used = cart.get("RED_POTION", 0)
-    green_used = cart.get("GREEN_POTION", 0)
-    blue_used = cart.get("BLUE_POTION", 0)
+    total_potions_bought = sum(cart.values())
+    total_gold_paid = 0
 
     with db.engine.begin() as connection:
-        row = connection.execute(
+        potion_data = connection.execute(
             sqlalchemy.text(
                 """
-                SELECT gold FROM global_inventory
-                """
-            )
-        ).one()
-
-        gold = row.gold
-        gold += total_gold_paid
-
-        connection.execute(
-            sqlalchemy.text(
-                """
-                UPDATE global_inventory
-                SET gold = gold + :gold,
-                red_potions = red_potions - :red_used,
-                green_potions = green_potions - :green_used,
-                blue_potions = blue_potions - :blue_used
-                
+                SELECT sku, amount, price FROM potions
+                WHERE sku = ANY(:skus)
                 """
             ),
-            {"gold": total_gold_paid,
-            "red_used": red_used,
-            "green_used": green_used,
-            "blue_used": blue_used},
+            {"skus": list(cart.keys())},
+        ).fetchall()
+
+        potion_lookup = {row.sku: row for row in potion_data}
+
+        for sku, qty in cart.items():
+            if sku not in potion_lookup:
+                raise HTTPException(status_code=400, detail=f"Invalid SKU: {sku}")
+            if potion_lookup[sku].amount < qty:
+                raise HTTPException(status_code=400, detail=f"Not enough {sku} in stock")
+
+            total_gold_paid += potion_lookup[sku].price * qty
+
+        connection.execute(
+            sqlalchemy.text("UPDATE global_inventory SET gold = gold + :gold"),
+            {"gold": total_gold_paid}
         )
+
+        for sku, qty in cart.items():
+            connection.execute(
+                sqlalchemy.text(
+                    "UPDATE potions SET amount = amount - :qty WHERE sku = :sku"
+                ),
+                {"sku": sku, "qty": qty}
+            )
+
+    return CheckoutResponse(
+        total_potions_bought=total_potions_bought,
+        total_gold_paid=total_gold_paid,
+    )
     # TODO: Deduct the right potions from inventory to the shop
 
     return CheckoutResponse(
