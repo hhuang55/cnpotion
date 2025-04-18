@@ -61,16 +61,15 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
 
     delivery = calculate_barrel_summary(barrels_delivered)
 
-    red_ml = green_ml = blue_ml = 0
+    red_ml = green_ml = blue_ml = dark_ml = 0
 
+    
     for barrel in barrels_delivered:
         ml_added = barrel.ml_per_barrel * barrel.quantity
-        if barrel.potion_type == [1.0, 0, 0, 0]:
-            red_ml += ml_added
-        elif barrel.potion_type == [0, 1.0, 0, 0]:
-            green_ml += ml_added
-        elif barrel.potion_type == [0, 0, 1.0, 0]:
-            blue_ml += ml_added
+        red_ml += barrel.potion_type[0] * ml_added
+        green_ml += barrel.potion_type[1] * ml_added
+        blue_ml += barrel.potion_type[2] * ml_added
+        dark_ml += barrel.potion_type[3] * ml_added
 
 
 
@@ -83,13 +82,15 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
                 gold = gold - :gold_paid,
                 red_ml = red_ml + :red_ml,
                 green_ml = green_ml + :green_ml,
-                blue_ml = blue_ml + :blue_ml
+                blue_ml = blue_ml + :blue_ml,
+                dark_ml = dark_ml + :dark_ml
                 """
             ),
             {"gold_paid": delivery.gold_paid,
               "red_ml": red_ml,
               "green_ml": green_ml,
-              "blue_ml": blue_ml
+              "blue_ml": blue_ml,
+                "dark_ml": dark_ml
               }
 
         )
@@ -110,7 +111,7 @@ def create_barrel_plan(
     plan = []
     
     # Randomly pick a color 
-    colors = ['red', 'green', 'blue']
+    colors = ['red', 'green', 'blue', 'dark']
     chosen_color = random.choice(colors)
 
     # Check inventory and price for the chosen color
@@ -146,6 +147,17 @@ def create_barrel_plan(
 
             if blue_barrel and blue_barrel.price <= gold:
                 plan.append(BarrelOrder(sku=blue_barrel.sku, quantity=1))
+    elif chosen_color == 'dark':
+        if current_dark_ml < 100:  # Fewer than 100 ml
+            dark_barrel = min(
+                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 0, 1.0]),
+                key=lambda b: b.price,
+                default=None
+        )
+            
+        if dark_barrel and dark_barrel.price <= gold:
+            plan.append(BarrelOrder(sku=dark_barrel.sku, quantity=1))
+
 
     return plan
 
@@ -162,7 +174,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         row = connection.execute(
             sqlalchemy.text(
                 """
-                SELECT gold, red_ml, green_ml, blue_ml
+                SELECT gold, red_ml, green_ml, blue_ml, dark_ml
                 FROM global_inventory
                 """
             )
@@ -172,6 +184,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         red_ml = row.red_ml
         green_ml = row.green_ml
         blue_ml = row.blue_ml
+        dark_ml = row.dark_ml
 
     # TODO: fill in values correctly based on what is in your database
     return create_barrel_plan(
@@ -180,6 +193,6 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         current_red_ml= red_ml,
         current_green_ml= green_ml,
         current_blue_ml= blue_ml,
-        current_dark_ml=0,
+        current_dark_ml= dark_ml,
         wholesale_catalog=wholesale_catalog,
     )
