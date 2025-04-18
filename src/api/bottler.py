@@ -121,7 +121,7 @@ def create_bottle_plan(
         if quantity == 0:
             continue
 
-
+        #to see if 100
         percentages = [
             int(r / total * 100),
             int(g / total * 100),
