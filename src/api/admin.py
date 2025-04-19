@@ -18,6 +18,7 @@ def reset():
     """
 
     with db.engine.begin() as connection:
+        # Reset global inventory
         connection.execute(
             sqlalchemy.text(
                 """
@@ -26,12 +27,18 @@ def reset():
                 red_ml = 0,
                 green_ml = 0,
                 blue_ml = 0,
-                red_potions = 0,
-                green_potions = 0,
-                blue_potions = 0
-
+                dark_ml = 0
                 """
             )
         )
-    # TODO: Implement database write logic here
-    pass
+    
+        # clear potion inventory
+        connection.execute(sqlalchemy.text("UPDATE potions SET amount = 0"))
+
+        # clear cart data
+        connection.execute(sqlalchemy.text("DELETE FROM cart_items"))
+        connection.execute(sqlalchemy.text("DELETE FROM carts"))
+
+
+    return
+

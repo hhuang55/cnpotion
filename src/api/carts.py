@@ -47,26 +47,45 @@ def search_orders(
     sort_col: SearchSortOptions = SearchSortOptions.timestamp,
     sort_order: SearchSortOrder = SearchSortOrder.desc,
 ):
+    query = f"""
+        SELECT 
+            ci.cart_item_id AS line_item_id,
+            ci.potion_sku AS item_sku,
+            c.customer_id AS customer_name,
+            ci.quantity * p.price AS line_item_total,
+            c.created_at AS timestamp
+        FROM cart_items ci
+        JOIN carts c ON ci.cart_id = c.cart_id
+        JOIN potions p ON ci.potion_sku = p.sku
+        WHERE (:customer_name = '' OR c.customer_id ILIKE :customer_name)
+        AND (:potion_sku = '' OR ci.potion_sku = :potion_sku)
+        ORDER BY {sort_col.value} {sort_order.value.upper()}
+        LIMIT 50
     """
-    Search for cart line items by customer name and/or potion sku.
-    """
+
+    with db.engine.begin() as connection:
+        rows = connection.execute(
+            sqlalchemy.text(query),
+            {"customer_name": f"%{customer_name}%", "potion_sku": potion_sku}
+        ).fetchall()
+
     return SearchResponse(
         previous=None,
         next=None,
         results=[
             LineItem(
-                line_item_id=1,
-                item_sku="1 oblivion potion",
-                customer_name="Scaramouche",
-                line_item_total=50,
-                timestamp="2021-01-01T00:00:00Z",
+                line_item_id=row.line_item_id,
+                item_sku=row.item_sku,
+                customer_name=row.customer_name,
+                line_item_total=row.line_item_total,
+                timestamp=row.timestamp.isoformat() if hasattr(row.timestamp, "isoformat") else row.timestamp
             )
+            for row in rows
         ],
     )
 
 
-cart_id_counter = 1
-carts: dict[int, dict[str, int]] = {}
+
 
 
 class Customer(BaseModel):
@@ -91,30 +110,52 @@ class CartCreateResponse(BaseModel):
 
 @router.post("/", response_model=CartCreateResponse)
 def create_cart(new_cart: Customer):
-    """
-    Creates a new cart for a specific customer.
-    """
-    global cart_id_counter
-    cart_id = cart_id_counter
-    cart_id_counter += 1
-    carts[cart_id] = {}
+    with db.engine.begin() as connection:
+        result = connection.execute(
+            sqlalchemy.text(
+                """
+                INSERT INTO carts (customer_id, customer_name)
+                VALUES (:customer_id, :customer_name)
+                RETURNING cart_id
+                """
+            ),
+            {
+                "customer_id": new_cart.customer_id,
+                "customer_name": new_cart.customer_name
+            }
+        )
+        cart_id = result.scalar_one()
+
     return CartCreateResponse(cart_id=cart_id)
+
 
 
 class CartItem(BaseModel):
     quantity: int = Field(ge=1, description="Quantity must be at least 1")
 
 
+
 @router.post("/{cart_id}/items/{item_sku}", status_code=status.HTTP_204_NO_CONTENT)
 def set_item_quantity(cart_id: int, item_sku: str, cart_item: CartItem):
-    print(
-        f"cart_id: {cart_id}, item_sku: {item_sku}, cart_item: {cart_item}, carts: {carts}"
-    )
-    if cart_id not in carts:
-        raise HTTPException(status_code=404, detail="Cart not found")
+    with db.engine.begin() as connection:
+        # Check if cart exists
+        result = connection.execute(
+            sqlalchemy.text("SELECT 1 FROM carts WHERE cart_id = :cart_id"),
+            {"cart_id": cart_id}
+        ).first()
 
-    carts[cart_id][item_sku] = cart_item.quantity
-    return status.HTTP_204_NO_CONTENT
+        if result is None:
+            raise HTTPException(status_code=404, detail="Cart not found")
+
+        connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO cart_items (cart_id, potion_sku, quantity)
+                VALUES (:cart_id, :sku, :qty)
+                ON CONFLICT (cart_id, potion_sku) DO UPDATE
+                SET quantity = :qty
+            """),
+            {"cart_id": cart_id, "sku": item_sku, "qty": cart_item.quantity}
+        )
 
 
 class CheckoutResponse(BaseModel):
@@ -128,46 +169,54 @@ class CartCheckout(BaseModel):
 
 @router.post("/{cart_id}/checkout", response_model=CheckoutResponse)
 def checkout(cart_id: int, cart_checkout: CartCheckout):
-    if cart_id not in carts:
-        raise HTTPException(status_code=404, detail="Cart not found")
-
-    cart = carts[cart_id]
-    total_potions_bought = sum(cart.values())
-    total_gold_paid = 0
-
     with db.engine.begin() as connection:
-        potion_data = connection.execute(
-            sqlalchemy.text(
-                """
-                SELECT sku, amount, price FROM potions
-                WHERE sku = ANY(:skus)
-                """
-            ),
-            {"skus": list(cart.keys())},
+        cart_items = connection.execute(
+            sqlalchemy.text("""
+                SELECT ci.potion_sku, ci.quantity, p.amount, p.price
+                FROM cart_items ci
+                JOIN potions p ON ci.potion_sku = p.sku
+                WHERE ci.cart_id = :cart_id
+            """),
+            {"cart_id": cart_id}
         ).fetchall()
 
-        potion_lookup = {row.sku: row for row in potion_data}
+        if not cart_items:
+            raise HTTPException(status_code=404, detail="Cart not found or empty")
 
-        for sku, qty in cart.items():
-            if sku not in potion_lookup:
-                raise HTTPException(status_code=400, detail=f"Invalid SKU: {sku}")
-            if potion_lookup[sku].amount < qty:
-                raise HTTPException(status_code=400, detail=f"Not enough {sku} in stock")
+        total_gold_paid = 0
+        total_potions_bought = 0
 
-            total_gold_paid += potion_lookup[sku].price * qty
+        for item in cart_items:
+            if item.amount < item.quantity:
+                raise HTTPException(status_code=400, detail=f"Not enough {item.potion_sku} in stock")
+            total_potions_bought += item.quantity
+            total_gold_paid += item.price * item.quantity
 
         connection.execute(
             sqlalchemy.text("UPDATE global_inventory SET gold = gold + :gold"),
             {"gold": total_gold_paid}
         )
 
-        for sku, qty in cart.items():
+        for item in cart_items:
             connection.execute(
-                sqlalchemy.text(
-                    "UPDATE potions SET amount = amount - :qty WHERE sku = :sku"
-                ),
-                {"sku": sku, "qty": qty}
+                sqlalchemy.text("""
+                    UPDATE potions SET amount = amount - :qty WHERE sku = :sku
+                """),
+                {"qty": item.quantity, "sku": item.potion_sku}
             )
+
+        # clear cart
+        connection.execute(
+            sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"),
+            {"cart_id": cart_id}
+        )
+
+        #true if checkedout from cart
+        connection.execute(
+        sqlalchemy.text("UPDATE carts SET checked_out = true WHERE cart_id = :cart_id"),
+        {"cart_id": cart_id}
+)
+
 
     return CheckoutResponse(
         total_potions_bought=total_potions_bought,

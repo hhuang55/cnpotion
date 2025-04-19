@@ -153,10 +153,10 @@ def create_barrel_plan(
                 (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 0, 1.0]),
                 key=lambda b: b.price,
                 default=None
-        )
+            )   
             
-        if dark_barrel and dark_barrel.price <= gold:
-            plan.append(BarrelOrder(sku=dark_barrel.sku, quantity=1))
+            if dark_barrel and dark_barrel.price <= gold:
+                plan.append(BarrelOrder(sku=dark_barrel.sku, quantity=1))
 
 
     return plan

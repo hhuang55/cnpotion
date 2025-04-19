@@ -22,7 +22,7 @@ class CapacityPlan(BaseModel):
         ge=0, le=10, description="Potion capacity units, max 10"
     )
     ml_capacity: int = Field(ge=0, le=10, description="ML capacity units, max 10")
-
+    
 
 @router.get("/audit", response_model=InventoryAudit)
 def get_inventory():
@@ -31,24 +31,31 @@ def get_inventory():
     what is reported here and my source of truth will be posted
     as errors on potion exchange.
     """
-
     with db.engine.begin() as connection:
         row = connection.execute(
             sqlalchemy.text(
                 """
-                SELECT *
-                FROM global_inventory
+                SELECT 
+                    gi.red_ml,
+                    gi.green_ml,
+                    gi.blue_ml,
+                    gi.dark_ml,
+                    gi.gold,
+                    (SELECT SUM(p.amount) FROM potions p) AS totalpot
+                FROM global_inventory gi
+                LIMIT 1
                 """
             )
         ).one()
-        total_ml = row.red_ml + row.green_ml + row.blue_ml
-        total_potions = row.red_potions + row.green_potions + row.blue_potions
 
+        total_ml = row.red_ml + row.green_ml + row.blue_ml + row.dark_ml
+        total_potions = row.totalpot
 
     return InventoryAudit(
-        number_of_potions = total_potions,     
-        ml_in_barrels = total_ml,
-        gold=row.gold)
+        number_of_potions=total_potions,
+        ml_in_barrels=total_ml,
+        gold=row.gold
+    )
 
 
 @router.post("/plan", response_model=CapacityPlan)
