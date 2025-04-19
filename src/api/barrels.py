@@ -116,7 +116,7 @@ def create_barrel_plan(
 
     # Check inventory and price for the chosen color
     if chosen_color == 'red':
-        if current_red_ml < 1000:
+        if current_red_ml < 2000:
             red_barrel = min(
                 (barrel for barrel in wholesale_catalog if barrel.potion_type == [1.0, 0, 0, 0]),
                 key=lambda b: b.price,
@@ -127,7 +127,7 @@ def create_barrel_plan(
                 plan.append(BarrelOrder(sku=red_barrel.sku, quantity=1))
 
     elif chosen_color == 'green':
-        if current_green_ml < 1000:  # Fewer than 100 ml
+        if current_green_ml < 2000:  # Fewer than 100 ml
             green_barrel = min(
                 (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 1.0, 0, 0]),
                 key=lambda b: b.price,
@@ -138,7 +138,7 @@ def create_barrel_plan(
                 plan.append(BarrelOrder(sku=green_barrel.sku, quantity=1))
 
     elif chosen_color == 'blue':
-        if current_blue_ml < 1000:  # Fewer than 100 ml
+        if current_blue_ml < 2000:  # Fewer than 100 ml
             blue_barrel = min(
                 (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 1.0, 0]),
                 key=lambda b: b.price,
