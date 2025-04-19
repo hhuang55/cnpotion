@@ -148,7 +148,7 @@ def create_barrel_plan(
             if blue_barrel and blue_barrel.price <= gold:
                 plan.append(BarrelOrder(sku=blue_barrel.sku, quantity=1))
     elif chosen_color == 'dark':
-        if current_dark_ml < 1000:  # Fewer than 100 ml
+        if current_dark_ml < 2000:  # Fewer than 100 ml
             dark_barrel = min(
                 (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 0, 1.0]),
                 key=lambda b: b.price,
