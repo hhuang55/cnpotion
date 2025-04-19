@@ -51,13 +51,13 @@ def search_orders(
         SELECT 
             ci.cart_item_id AS line_item_id,
             ci.potion_sku AS item_sku,
-            c.customer_id AS customer_name,
+            c.customer_name AS customer_name,
             ci.quantity * p.price AS line_item_total,
             c.created_at AS timestamp
         FROM cart_items ci
         JOIN carts c ON ci.cart_id = c.cart_id
         JOIN potions p ON ci.potion_sku = p.sku
-        WHERE (:customer_name = '' OR c.customer_id ILIKE :customer_name)
+        WHERE (:customer_name = '' OR c.customer_name ILIKE :customer_name)
         AND (:potion_sku = '' OR ci.potion_sku = :potion_sku)
         ORDER BY {sort_col.value} {sort_order.value.upper()}
         LIMIT 50
