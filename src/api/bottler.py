@@ -121,15 +121,9 @@ def create_bottle_plan(
         if quantity == 0:
             continue
 
-        percentages = [
-            int(r / total * 100),
-            int(g / total * 100),
-            int(b / total * 100),
-            int(d / total * 100),
-        ]
+        percentages = [r, g, b, d]
 
-        diff = 100 - sum(percentages)
-        percentages[0] += diff
+
 
         plan.append(PotionMixes(potion_type=percentages, quantity=quantity))
 
