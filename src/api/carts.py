@@ -206,10 +206,10 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             )
 
         # clear cart
-        connection.execute(
-            sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"),
-            {"cart_id": cart_id}
-        )
+        #connection.execute(
+           # sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"),
+            #{"cart_id": cart_id}
+        #)
 
         #true if checkedout from cart
         connection.execute(
