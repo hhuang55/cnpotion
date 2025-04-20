@@ -129,6 +129,7 @@ def create_bottle_plan(
         remaining_green -= g * quantity
         remaining_blue -= b * quantity
         remaining_dark -= d * quantity
+        maximum_potion_capacity -= quantity
 
         plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
 
@@ -152,6 +153,8 @@ def create_bottle_plan(
         remaining_green -= g * quantity
         remaining_blue -= b * quantity
         remaining_dark -= d * quantity
+        maximum_potion_capacity -= quantity
+
 
         plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
 
@@ -167,7 +170,16 @@ def get_bottle_plan():
 
     with db.engine.begin() as connection:
         result = connection.execute(
-            sqlalchemy.text("SELECT red_ml, green_ml, blue_ml, dark_ml, potion_capacity FROM global_inventory")).first()
+            sqlalchemy.text("""
+                SELECT red_ml, green_ml, blue_ml, dark_ml, potion_capacity 
+                FROM global_inventory
+            """)
+        ).first()
+
+        # calculate total potions
+        total_potions = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM potions")
+        ).scalar_one()
 
         red_ml = result.red_ml
         green_ml = result.green_ml
@@ -175,13 +187,15 @@ def get_bottle_plan():
         dark_ml = result.dark_ml
         potion_capacity = result.potion_capacity
 
-    # TODO: Fill in values below based on what is in your database
+        # remaining potion slots
+        remaining_capacity = max(0, 50 * potion_capacity - total_potions)
+
     return create_bottle_plan(
         red_ml=red_ml,
         green_ml=green_ml,
         blue_ml=blue_ml,
         dark_ml=dark_ml,
-        maximum_potion_capacity= 50 * potion_capacity,
+        maximum_potion_capacity=remaining_capacity,
         current_potion_inventory=[],
     )
 
