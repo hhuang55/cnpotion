@@ -108,56 +108,54 @@ def create_barrel_plan(
     current_dark_ml: int,
     wholesale_catalog: List[Barrel],
 ) -> List[BarrelOrder]:
-    plan = []
-    
-    # Randomly pick a color 
-    colors = ['red', 'green', 'blue', 'dark']
-    chosen_color = random.choice(colors)
+    import math
 
-    # Check inventory and price for the chosen color
-    if chosen_color == 'red':
-        if current_red_ml < 2000:
-            red_barrel = min(
-                (barrel for barrel in wholesale_catalog if barrel.potion_type == [1.0, 0, 0, 0]),
-                key=lambda b: b.price,
-                default=None
-            )
+    plan: List[BarrelOrder] = []
+    remaining_gold = gold
 
-            if red_barrel and red_barrel.price <= gold:
-                plan.append(BarrelOrder(sku=red_barrel.sku, quantity=1))
+    target_per_color = max_barrel_capacity // 4
+    current_ml = [current_red_ml, current_green_ml, current_blue_ml, current_dark_ml]
+    needed_ml = [max(0, target_per_color - amt) for amt in current_ml]
 
-    elif chosen_color == 'green':
-        if current_green_ml < 2000:  # Fewer than 100 ml
-            green_barrel = min(
-                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 1.0, 0, 0]),
-                key=lambda b: b.price,
-                default=None
-            )
+    def needed_from_barrel(barrel: Barrel) -> float:
+        return sum(
+            barrel.potion_type[i] * barrel.ml_per_barrel
+            if needed_ml[i] > 0 else 0
+            for i in range(4)
+        )
 
-            if green_barrel and green_barrel.price <= gold:
-                plan.append(BarrelOrder(sku=green_barrel.sku, quantity=1))
+    #sort out the useful barrels
+    useful_barrels = [b for b in wholesale_catalog if needed_from_barrel(b) > 0]
+    useful_barrels.sort(key=lambda b: (b.price / needed_from_barrel(b)) if needed_from_barrel(b) > 0 else float("inf"))
 
-    elif chosen_color == 'blue':
-        if current_blue_ml < 2000:  # Fewer than 100 ml
-            blue_barrel = min(
-                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 1.0, 0]),
-                key=lambda b: b.price,
-                default=None
-            )
 
-            if blue_barrel and blue_barrel.price <= gold:
-                plan.append(BarrelOrder(sku=blue_barrel.sku, quantity=1))
-    elif chosen_color == 'dark':
-        if current_dark_ml < 2000:  # Fewer than 100 ml
-            dark_barrel = min(
-                (barrel for barrel in wholesale_catalog if barrel.potion_type == [0, 0, 0, 1.0]),
-                key=lambda b: b.price,
-                default=None
-            )   
-            
-            if dark_barrel and dark_barrel.price <= gold:
-                plan.append(BarrelOrder(sku=dark_barrel.sku, quantity=1))
+    for barrel in useful_barrels:
+        if barrel.price > remaining_gold or barrel.quantity == 0: #check for cost
+            continue
 
+        #how much each color barrel gives
+        ml_per_color = [barrel.potion_type[i] * barrel.ml_per_barrel for i in range(4)]  
+
+
+        # barrels we cacn buy before hitting threshold
+        max_quantity_based_on_need = math.inf
+        for i in range(4):
+            if ml_per_color[i] > 0 and needed_ml[i] > 0:
+                can_take = needed_ml[i] / ml_per_color[i]
+                max_quantity_based_on_need = min(max_quantity_based_on_need, int(math.ceil(can_take)))
+
+        #how much we can buy
+        max_quantity_affordable = remaining_gold // barrel.price
+        final_quantity = min(barrel.quantity, max_quantity_affordable, max_quantity_based_on_need)
+
+        if final_quantity > 0:
+            plan.append(BarrelOrder(sku=barrel.sku, quantity=final_quantity))
+            remaining_gold -= final_quantity * barrel.price
+            for i in range(4):
+                needed_ml[i] = max(0, needed_ml[i] - (ml_per_color[i] * final_quantity))
+
+        if all(ml == 0 for ml in needed_ml):
+            break
 
     return plan
 
