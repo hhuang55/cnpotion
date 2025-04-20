@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, HTTPException
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field, field_validator
 from typing import List
@@ -74,6 +74,9 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
 
 
     with db.engine.begin() as connection:
+        row = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).first()
+        if row.gold < delivery.gold_paid:
+            raise HTTPException(status_code=400, detail="Not enough gold to pay for barrels")
         connection.execute(
             sqlalchemy.text(
                 """
@@ -180,7 +183,7 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         row = connection.execute(
             sqlalchemy.text(
                 """
-                SELECT gold, red_ml, green_ml, blue_ml, dark_ml
+                SELECT gold, red_ml, green_ml, blue_ml, dark_ml, ml_capacity
                 FROM global_inventory
                 """
             )
@@ -191,11 +194,12 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
         green_ml = row.green_ml
         blue_ml = row.blue_ml
         dark_ml = row.dark_ml
+        ml_capacity = row.ml_capacity
 
     # TODO: fill in values correctly based on what is in your database
     return create_barrel_plan(
         gold=gold,
-        max_barrel_capacity=10000,
+        max_barrel_capacity=10000 * ml_capacity,
         current_red_ml= red_ml,
         current_green_ml= green_ml,
         current_blue_ml= blue_ml,
