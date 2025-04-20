@@ -27,11 +27,13 @@ def reset():
                 red_ml = 0,
                 green_ml = 0,
                 blue_ml = 0,
-                dark_ml = 0
+                dark_ml = 0,
+                potion_capacity = 1,
+                ml_capacity = 1
                 """
             )
         )
-    
+
         # clear potion inventory
         connection.execute(sqlalchemy.text("UPDATE potions SET amount = 0"))
 

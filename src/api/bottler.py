@@ -167,12 +167,13 @@ def get_bottle_plan():
 
     with db.engine.begin() as connection:
         result = connection.execute(
-            sqlalchemy.text("SELECT red_ml, green_ml, blue_ml, dark_ml FROM global_inventory")).first()
+            sqlalchemy.text("SELECT red_ml, green_ml, blue_ml, dark_ml, potion_capacity FROM global_inventory")).first()
 
         red_ml = result.red_ml
         green_ml = result.green_ml
         blue_ml = result.blue_ml
         dark_ml = result.dark_ml
+        potion_capacity = result.potion_capacity
 
     # TODO: Fill in values below based on what is in your database
     return create_bottle_plan(
@@ -180,7 +181,7 @@ def get_bottle_plan():
         green_ml=green_ml,
         blue_ml=blue_ml,
         dark_ml=dark_ml,
-        maximum_potion_capacity=50,
+        maximum_potion_capacity= 50 * potion_capacity,
         current_potion_inventory=[],
     )
 
