@@ -148,6 +148,13 @@ def create_barrel_plan(
         max_quantity_affordable = remaining_gold // barrel.price
         final_quantity = min(barrel.quantity, max_quantity_affordable, max_quantity_based_on_need)
 
+        #check for overflow
+        for i in range(4):
+            if ml_per_color[i] > 0:
+                room_left = max(0, target_per_color - current_ml[i])
+                max_for_this_color = int(room_left // ml_per_color[i])
+                final_quantity = min(final_quantity, max_for_this_color)
+
         if final_quantity > 0:
             plan.append(BarrelOrder(sku=barrel.sku, quantity=final_quantity))
             remaining_gold -= final_quantity * barrel.price
