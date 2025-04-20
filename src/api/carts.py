@@ -51,7 +51,7 @@ def search_orders(
         SELECT 
             ci.cart_item_id AS line_item_id,
             p.name AS item_sku,
-            c.customer_id AS customer_name,
+            c.customer_name AS customer_name,
             ci.quantity * p.price AS line_item_total,
             c.created_at AS timestamp
         FROM cart_items ci
