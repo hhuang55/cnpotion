@@ -113,63 +113,77 @@ def create_barrel_plan(
     wholesale_catalog: List[Barrel],
 ) -> List[BarrelOrder]:
     import math
+    from collections import defaultdict
 
     plan: List[BarrelOrder] = []
     remaining_gold = gold
 
     target_per_color = max_barrel_capacity // 4
     current_ml = [current_red_ml, current_green_ml, current_blue_ml, current_dark_ml]
-    needed_ml = [max(0, target_per_color - amt) for amt in current_ml]
 
-    def needed_from_barrel(barrel: Barrel) -> float:
-        return sum(
-            barrel.potion_type[i] * barrel.ml_per_barrel
-            if needed_ml[i] > 0 else 0
-            for i in range(4)
-        )
+    while True:
+        needed_ml = [max(0, target_per_color - amt) for amt in current_ml]
 
-    #sort out the useful barrels
-    useful_barrels = [b for b in wholesale_catalog if needed_from_barrel(b) > 0]
-    useful_barrels.sort(key=lambda b: (b.price / needed_from_barrel(b)) if needed_from_barrel(b) > 0 else float("inf"))
-
-
-    for barrel in useful_barrels:
-        if barrel.price > remaining_gold or barrel.quantity == 0: #check for cost
-            continue
-
-        #how much each color barrel gives
-        ml_per_color = [barrel.potion_type[i] * barrel.ml_per_barrel for i in range(4)]  
-
-
-        # barrels we cacn buy before hitting threshold
-        max_quantity_based_on_need = math.inf
-        for i in range(4):
-            if ml_per_color[i] > 0 and needed_ml[i] > 0:
-                can_take = needed_ml[i] / ml_per_color[i]
-                max_quantity_based_on_need = min(max_quantity_based_on_need, int(math.ceil(can_take)))
-
-        #how much we can buy
-        max_quantity_affordable = remaining_gold // barrel.price
-        final_quantity = min(barrel.quantity, max_quantity_affordable, max_quantity_based_on_need)
-
-        #check for overflow
-        for i in range(4):
-            if ml_per_color[i] > 0:
-                room_left = max(0, target_per_color - current_ml[i])
-                max_for_this_color = int(room_left // ml_per_color[i])
-                final_quantity = min(final_quantity, max_for_this_color)
-
-        if final_quantity > 0:
-            plan.append(BarrelOrder(sku=barrel.sku, quantity=final_quantity))
-            remaining_gold -= final_quantity * barrel.price
-            for i in range(4):
-                needed_ml[i] = max(0, needed_ml[i] - (ml_per_color[i] * final_quantity))
-
-        #no needed
-        if all(ml == 0 for ml in needed_ml):
+        if all(n == 0 for n in needed_ml):
             break
 
-    return plan
+        def useful_ml(barrel: Barrel) -> float:
+            return sum(
+                barrel.potion_type[i] * barrel.ml_per_barrel if needed_ml[i] > 0 else 0
+                for i in range(4)
+            )
+
+        # only barrels with > 3 ml/g and needs refill
+        useful_barrels = [
+            b for b in wholesale_catalog
+            if useful_ml(b) > 0 and b.price > 0 and (useful_ml(b) / b.price) > 3 and b.quantity > 0 and b.price <= remaining_gold
+        ]
+
+        if not useful_barrels:
+            break
+
+        # sort by how useful per price
+        useful_barrels.sort(key=lambda b: b.price / useful_ml(b))
+        best_ratio = useful_barrels[0].price / useful_ml(useful_barrels[0])
+
+        # find all best
+        equally_best = [b for b in useful_barrels if abs((b.price / useful_ml(b)) - best_ratio) < 1e-6]
+
+        bought = False
+        for barrel in equally_best:
+            if barrel.price > remaining_gold or barrel.quantity <= 0:
+                continue
+
+            ml_per_color = [barrel.potion_type[i] * barrel.ml_per_barrel for i in range(4)]
+
+            # check if overflow
+            overflows = False
+            for i in range(4):
+                if ml_per_color[i] > 0:
+                    if current_ml[i] + ml_per_color[i] > target_per_color:
+                        overflows = True
+                        break
+            if overflows:
+                continue
+
+            #buy 1
+            plan.append(BarrelOrder(sku=barrel.sku, quantity=1))
+            remaining_gold -= barrel.price
+            barrel.quantity -= 1
+            for i in range(4):
+                current_ml[i] += ml_per_color[i]
+            bought = True
+
+        if not bought:
+            break
+
+    # compress similar sku into 1
+    compressed = defaultdict(int)
+    for order in plan:
+        compressed[order.sku] += order.quantity
+    return [BarrelOrder(sku=sku, quantity=qty) for sku, qty in compressed.items()]
+
+
 
 
 @router.post("/plan", response_model=List[BarrelOrder])
