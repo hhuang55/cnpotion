@@ -104,28 +104,56 @@ def create_bottle_plan(
             SELECT red_ml, green_ml, blue_ml, dark_ml FROM potions
         """)).fetchall()
 
+    # Convert ml into mutable values
+    remaining_red = red_ml
+    remaining_green = green_ml
+    remaining_blue = blue_ml
+    remaining_dark = dark_ml
     for potion in potions:
         r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
-        total = r + g + b + d
-        if total == 0:
+        if r + g + b + d == 0:
             continue
 
-        max_possible = min(
-            red_ml // r if r else float("inf"),
-            green_ml // g if g else float("inf"),
-            blue_ml // b if b else float("inf"),
-            dark_ml // d if d else float("inf"),
+        can_make = min(
+            remaining_red // r if r else float("inf"),
+            remaining_green // g if g else float("inf"),
+            remaining_blue // b if b else float("inf"),
+            remaining_dark // d if d else float("inf"),
         )
 
-        quantity = min(max_possible, maximum_potion_capacity)
+        quantity = min(5, can_make, maximum_potion_capacity)
+        if quantity < 5:
+            continue  # skip if cant make 5
+
+        remaining_red -= r * quantity
+        remaining_green -= g * quantity
+        remaining_blue -= b * quantity
+        remaining_dark -= d * quantity
+
+        plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
+
+    for potion in potions:
+        r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
+        if r + g + b + d == 0:
+            continue
+
+        can_make = min(
+            remaining_red // r if r else float("inf"),
+            remaining_green // g if g else float("inf"),
+            remaining_blue // b if b else float("inf"),
+            remaining_dark // d if d else float("inf"),
+        )
+
+        quantity = min(can_make, maximum_potion_capacity)
         if quantity == 0:
             continue
 
-        percentages = [r, g, b, d]
+        remaining_red -= r * quantity
+        remaining_green -= g * quantity
+        remaining_blue -= b * quantity
+        remaining_dark -= d * quantity
 
-
-
-        plan.append(PotionMixes(potion_type=percentages, quantity=quantity))
+        plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
 
     return plan
 
@@ -136,6 +164,7 @@ def get_bottle_plan():
     Each bottle has a quantity of what proportion of red, green, blue, and dark potions to add.
     Colors are expressed in integers from 0 to 100 that must sum up to exactly 100.
     """
+
     with db.engine.begin() as connection:
         result = connection.execute(
             sqlalchemy.text("SELECT red_ml, green_ml, blue_ml, dark_ml FROM global_inventory")).first()
