@@ -149,8 +149,12 @@ def create_bottle_plan(
             remaining_dark // d if d else float("inf"),
         )
 
-        quantity = min(size_preferred, can_make, maximum_potion_capacity)
-        if quantity < size_preferred: #continue if less than 1/6
+        max_allowed = size_preferred - existing_qty
+        if max_allowed <= 0:
+            continue
+
+        quantity = min(max_allowed, can_make, maximum_potion_capacity)
+        if quantity <= 0:
             continue
 
         remaining_red -= r * quantity
@@ -158,6 +162,7 @@ def create_bottle_plan(
         remaining_blue -= b * quantity
         remaining_dark -= d * quantity
         maximum_potion_capacity -= quantity
+
 
         plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
 
