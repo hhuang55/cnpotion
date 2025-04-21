@@ -134,10 +134,27 @@ def create_barrel_plan(
             )
 
         # only barrels with > 3 ml/g and needs refill
-        useful_barrels = [
-            b for b in wholesale_catalog
-            if useful_ml(b) > 0 and b.price > 0 and (useful_ml(b) / b.price) > 3 and b.quantity > 0 and b.price <= remaining_gold
-        ]
+        useful_barrels = []
+        for b in wholesale_catalog:
+            if b.price <= 0 or b.quantity <= 0 or b.price > remaining_gold:
+                continue
+
+            u_ml = useful_ml(b)
+            if u_ml <= 0 or (u_ml / b.price) < 3:
+                continue
+
+            ml_per_color = [b.potion_type[i] * b.ml_per_barrel for i in range(4)]
+
+            # filter out if it would overflow
+            would_overflow = False
+            for i in range(4):
+                if ml_per_color[i] > 0 and current_ml[i] + ml_per_color[i] > target_per_color:
+                    would_overflow = True
+                    break
+
+            if not would_overflow:
+                useful_barrels.append(b)
+
 
         if not useful_barrels:
             break
@@ -156,16 +173,6 @@ def create_barrel_plan(
 
             ml_per_color = [barrel.potion_type[i] * barrel.ml_per_barrel for i in range(4)]
 
-            # check if overflow
-            overflows = False
-            for i in range(4):
-                if ml_per_color[i] > 0:
-                    if current_ml[i] + ml_per_color[i] > target_per_color:
-                        overflows = True
-                        break
-            if overflows:
-                continue
-
             #buy 1
             plan.append(BarrelOrder(sku=barrel.sku, quantity=1))
             remaining_gold -= barrel.price
@@ -177,7 +184,7 @@ def create_barrel_plan(
         if not bought:
             break
 
-    # compress similar sku into 1
+    # compress repeated SKUs into 1
     compressed = defaultdict(int)
     for order in plan:
         compressed[order.sku] += order.quantity
