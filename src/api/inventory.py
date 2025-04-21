@@ -89,9 +89,9 @@ def get_capacity_plan():
         potion_slots_left = max(10 - potion_capacity, 0)
         ml_slots_left = max(10 - ml_capacity, 0)
 
-        #split it evenly
-        ml_to_buy = min(potion_slots_left, max_units // 2)
-        potions_to_buy = min(ml_slots_left, max_units - potions_to_buy)
+        potions_to_buy = min(potion_slots_left, max_units)
+        ml_to_buy = min(ml_slots_left, (max_units - potions_to_buy) // 2)
+
 
         return CapacityPlan(potion_capacity=potions_to_buy, ml_capacity=ml_to_buy)
 
