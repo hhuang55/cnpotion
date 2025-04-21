@@ -108,9 +108,19 @@ def create_bottle_plan(
             SELECT SUM(amount) FROM potions
         """)).scalar() or 0
 
+
         gold = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).scalar_one()
 
+        rows = connection.execute(sqlalchemy.text("""
+            SELECT red_ml, green_ml, blue_ml, dark_ml, amount FROM potions
+        """)).fetchall()
         
+        potion_counts = {}
+        for row in rows:
+            key = (row.red_ml, row.green_ml, row.blue_ml, row.dark_ml)
+            potion_counts[key] = row.amount
+
+
     remaining_red = red_ml
     remaining_green = green_ml
     remaining_blue = blue_ml
@@ -126,6 +136,9 @@ def create_bottle_plan(
     for potion in potions:
         r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
         if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
+            continue
+        existing_qty = potion_counts.get((r, g, b, d), 0)
+        if existing_qty >= size_preferred:
             continue
 
         can_make = min(
