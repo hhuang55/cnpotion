@@ -116,7 +116,7 @@ def create_bottle_plan(
     remaining_blue = blue_ml
     remaining_dark = dark_ml
 
-    size_preferred = max(1, maximum_potion_capacity // 5)
+    size_preferred = max(1, maximum_potion_capacity // 6)
 
 
     def is_basic_potion(r, g, b, d):
@@ -136,7 +136,7 @@ def create_bottle_plan(
         )
 
         quantity = min(size_preferred, can_make, maximum_potion_capacity)
-        if quantity < size_preferred: #continue if less than 1/5 of max
+        if quantity < size_preferred: #continue if less than 1/6
             continue
 
         remaining_red -= r * quantity
@@ -148,29 +148,30 @@ def create_bottle_plan(
         plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
 
 
-    for potion in potions:
-        r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
-        if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
-            continue
+    # for potion in potions:
+    #     r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
+    #     if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
+    #         continue
 
-        can_make = min(
-            remaining_red // r if r else float("inf"),
-            remaining_green // g if g else float("inf"),
-            remaining_blue // b if b else float("inf"),
-            remaining_dark // d if d else float("inf"),
-        )
+    #     can_make = min(
+    #         remaining_red // r if r else float("inf"),
+    #         remaining_green // g if g else float("inf"),
+    #         remaining_blue // b if b else float("inf"),
+    #         remaining_dark // d if d else float("inf"),
+    #     )
 
-        quantity = min(can_make, maximum_potion_capacity)
-        if quantity == 0:
-            continue
+    #     quantity = min(can_make, maximum_potion_capacity)
+    #     if quantity == 0:
+    #         continue
 
-        remaining_red -= r * quantity
-        remaining_green -= g * quantity
-        remaining_blue -= b * quantity
-        remaining_dark -= d * quantity
-        maximum_potion_capacity -= quantity
+    #     remaining_red -= r * quantity
+    #     remaining_green -= g * quantity
+    #     remaining_blue -= b * quantity
+    #     remaining_dark -= d * quantity
+    #     maximum_potion_capacity -= quantity
 
-        plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
+    #     plan.append(PotionMixes(potion_type=[r, g, b, d], quantity=quantity))
+        
 
     #make normal potion as last resort
     if not plan and gold < 100 and total_existing == 0 and maximum_potion_capacity > 0:
@@ -189,6 +190,7 @@ def create_bottle_plan(
 
 
     return plan
+
 
 @router.post("/plan", response_model=List[PotionMixes])
 def get_bottle_plan():

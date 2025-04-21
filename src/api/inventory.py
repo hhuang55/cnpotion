@@ -82,7 +82,7 @@ def get_capacity_plan():
         ml_capacity = row.ml_capacity
 
         #have at least 1k gold
-        usable_gold = max(gold - (1000 * ml_capacity), 0)
+        usable_gold = max(gold - 1000, 0)
         max_units = usable_gold // 1000
 
         #how many can be bought
@@ -90,8 +90,8 @@ def get_capacity_plan():
         ml_slots_left = max(10 - ml_capacity, 0)
 
         #split it evenly
-        potions_to_buy = min(potion_slots_left, max_units // 2)
-        ml_to_buy = min(ml_slots_left, max_units - potions_to_buy)
+        ml_to_buy = min(potion_slots_left, max_units // 2)
+        potions_to_buy = min(ml_slots_left, max_units - potions_to_buy)
 
         return CapacityPlan(potion_capacity=potions_to_buy, ml_capacity=ml_to_buy)
 
