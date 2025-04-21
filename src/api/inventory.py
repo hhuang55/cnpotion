@@ -82,7 +82,7 @@ def get_capacity_plan():
         ml_capacity = row.ml_capacity
 
         #have at least 1k gold
-        usable_gold = max(gold - 1000, 0)
+        usable_gold = max(gold - (1000 * ml_capacity), 0)
         max_units = usable_gold // 1000
 
         #how many can be bought
