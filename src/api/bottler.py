@@ -129,14 +129,14 @@ def create_bottle_plan(
     size_preferred = max(1, maximum_potion_capacity // 6)
 
 
-    def is_basic_potion(r, g, b, d):
-        return [r, g, b, d] in ([100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100])
+    # def is_basic_potion(r, g, b, d):
+    #     return [r, g, b, d] in ([100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100])
     
 
     for potion in potions:
         r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
-        if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
-            continue
+        # if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
+            # continue
         existing_qty = potion_counts.get((r, g, b, d), 0)
         if existing_qty >= size_preferred:
             continue
@@ -187,19 +187,19 @@ def create_bottle_plan(
         
 
     #make normal potion as last resort
-    if not plan and gold < 100 and total_existing == 0 and maximum_potion_capacity > 0:
-        if red_ml >= 100:
-            max_quantity = min(red_ml // 100, maximum_potion_capacity)
-            plan.append(PotionMixes(potion_type=[100, 0, 0, 0], quantity=max_quantity))
-        elif green_ml >= 100:
-            max_quantity = min(green_ml // 100, maximum_potion_capacity)
-            plan.append(PotionMixes(potion_type=[0, 100, 0, 0], quantity=max_quantity))
-        elif blue_ml >= 100:
-            max_quantity = min(blue_ml // 100, maximum_potion_capacity)
-            plan.append(PotionMixes(potion_type=[0, 0, 100, 0], quantity=max_quantity))
-        elif dark_ml >= 100:
-            max_quantity = min(dark_ml // 100, maximum_potion_capacity)
-            plan.append(PotionMixes(potion_type=[0, 0, 0, 100], quantity=max_quantity))
+    # if not plan and gold < 100 and total_existing == 0 and maximum_potion_capacity > 0:
+    #     if red_ml >= 100:
+    #         max_quantity = min(red_ml // 100, maximum_potion_capacity)
+    #         plan.append(PotionMixes(potion_type=[100, 0, 0, 0], quantity=max_quantity))
+    #     elif green_ml >= 100:
+    #         max_quantity = min(green_ml // 100, maximum_potion_capacity)
+    #         plan.append(PotionMixes(potion_type=[0, 100, 0, 0], quantity=max_quantity))
+    #     elif blue_ml >= 100:
+    #         max_quantity = min(blue_ml // 100, maximum_potion_capacity)
+    #         plan.append(PotionMixes(potion_type=[0, 0, 100, 0], quantity=max_quantity))
+    #     elif dark_ml >= 100:
+    #         max_quantity = min(dark_ml // 100, maximum_potion_capacity)
+    #         plan.append(PotionMixes(potion_type=[0, 0, 0, 100], quantity=max_quantity))
 
 
     return plan
