@@ -122,8 +122,10 @@ def create_barrel_plan(
     current_ml = [current_red_ml, current_green_ml, current_blue_ml, current_dark_ml]
 
     while True:
+        # compute how much we need per color
         needed_ml = [max(0, target_per_color - amt) for amt in current_ml]
 
+        # stop if nothing is needed
         if all(n == 0 for n in needed_ml):
             break
 
@@ -155,16 +157,23 @@ def create_barrel_plan(
             if not would_overflow:
                 useful_barrels.append(b)
 
-
         if not useful_barrels:
             break
 
+        # find which color is most lacking
+        most_needed_index = needed_ml.index(max(needed_ml))
+
+        # prioritize barrels that help that color
+        prioritized_barrels = [b for b in useful_barrels if b.potion_type[most_needed_index] > 0]
+        if not prioritized_barrels:
+            prioritized_barrels = useful_barrels
+
         # sort by how useful per price
-        useful_barrels.sort(key=lambda b: b.price / useful_ml(b))
-        best_ratio = useful_barrels[0].price / useful_ml(useful_barrels[0])
+        prioritized_barrels.sort(key=lambda b: b.price / useful_ml(b))
+        best_ratio = prioritized_barrels[0].price / useful_ml(prioritized_barrels[0])
 
         # find all best
-        equally_best = [b for b in useful_barrels if abs((b.price / useful_ml(b)) - best_ratio) < 1e-6]
+        equally_best = [b for b in prioritized_barrels if abs((b.price / useful_ml(b)) - best_ratio) < 1e-6]
 
         bought = False
         for barrel in equally_best:
@@ -173,7 +182,7 @@ def create_barrel_plan(
 
             ml_per_color = [barrel.potion_type[i] * barrel.ml_per_barrel for i in range(4)]
 
-            #buy 1
+            # buy 1
             plan.append(BarrelOrder(sku=barrel.sku, quantity=1))
             remaining_gold -= barrel.price
             barrel.quantity -= 1
@@ -189,6 +198,7 @@ def create_barrel_plan(
     for order in plan:
         compressed[order.sku] += order.quantity
     return [BarrelOrder(sku=sku, quantity=qty) for sku, qty in compressed.items()]
+
 
 
 
