@@ -96,6 +96,7 @@ def create_bottle_plan(
     dark_ml: int,
     maximum_potion_capacity: int,
     current_potion_inventory: List[PotionMixes],
+    potion_capacity: int
 ) -> List[PotionMixes]:
     plan = []
 
@@ -126,7 +127,7 @@ def create_bottle_plan(
     remaining_blue = blue_ml
     remaining_dark = dark_ml
 
-    size_preferred = max(1, maximum_potion_capacity // 6)
+    size_preferred = max(1, (potion_capacity * 50) // 6)
 
 
     # def is_basic_potion(r, g, b, d):
@@ -242,6 +243,7 @@ def get_bottle_plan():
         dark_ml=dark_ml,
         maximum_potion_capacity=remaining_capacity,
         current_potion_inventory=[],
+        potion_capacity=potion_capacity,
     )
 
 
