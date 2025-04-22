@@ -61,10 +61,8 @@ def get_inventory():
 @router.post("/plan", response_model=CapacityPlan)
 def get_capacity_plan():
     """
-    Provides a daily capacity purchase plan.
-
-    - Start with 1 capacity for 50 potions and 1 capacity for 10,000 ml of potion.
-    - Each additional capacity unit costs 1000 gold.
+    Provides a balanced capacity purchase plan.
+    Tries to even out potion and ml capacity by prioritizing the lower one.
     """
     with db.engine.begin() as connection:
         row = connection.execute(
@@ -81,17 +79,30 @@ def get_capacity_plan():
         potion_capacity = row.potion_capacity
         ml_capacity = row.ml_capacity
 
-        #have at least 1k gold
         usable_gold = max(gold - 1000, 0)
-        max_units = usable_gold // 1000
+        units_available = usable_gold // 1000
 
-        #how many can be bought
-        potion_slots_left = max(10 - potion_capacity, 0)
-        ml_slots_left = max(10 - ml_capacity, 0)
+        max_potions = 10 - potion_capacity
+        max_ml = 10 - ml_capacity
 
-        potions_to_buy = min(potion_slots_left, max_units)
-        ml_to_buy = min(ml_slots_left, (max_units - potions_to_buy) // 2)
+        potions_to_buy = 0
+        ml_to_buy = 0
 
+        while units_available > 0 and (max_potions > 0 or max_ml > 0):
+            if potion_capacity + potions_to_buy < ml_capacity + ml_to_buy and max_potions > 0:
+                potions_to_buy += 1
+                max_potions -= 1
+            elif ml_capacity + ml_to_buy < potion_capacity + potions_to_buy and max_ml > 0:
+                ml_to_buy += 1
+                max_ml -= 1
+            else:
+                if max_potions > 0:
+                    potions_to_buy += 1
+                    max_potions -= 1
+                elif max_ml > 0:
+                    ml_to_buy += 1
+                    max_ml -= 1
+            units_available -= 1
 
         return CapacityPlan(potion_capacity=potions_to_buy, ml_capacity=ml_to_buy)
 
