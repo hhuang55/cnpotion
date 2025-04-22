@@ -61,8 +61,10 @@ def get_inventory():
 @router.post("/plan", response_model=CapacityPlan)
 def get_capacity_plan():
     """
-    Provides a balanced capacity purchase plan.
-    Tries to even out potion and ml capacity by prioritizing the lower one.
+    Provides a daily capacity purchase plan.
+
+    - Start with 1 capacity for 50 potions and 1 capacity for 10,000 ml of potion.
+    - Each additional capacity unit costs 1000 gold.
     """
     with db.engine.begin() as connection:
         row = connection.execute(
