@@ -28,6 +28,7 @@ def create_catalog() -> List[CatalogItem]:
                 SELECT sku, name, amount, price, red_ml, green_ml, blue_ml, dark_ml
                 FROM potions
                 WHERE amount > 0
+                ORDER BY amount DESC
                 LIMIT 6
             """)
         ).fetchall()
