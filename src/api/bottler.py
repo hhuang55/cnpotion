@@ -138,6 +138,12 @@ def create_bottle_plan(
         r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
         # if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
             # continue
+        
+        if [r, g, b, d] in ([10, 60, 30, 0], [0, 50, 50, 0]): #skip crafting earth and cyan potion
+            continue
+
+
+
         existing_qty = potion_counts.get((r, g, b, d), 0)
         if existing_qty >= size_preferred:
             continue
