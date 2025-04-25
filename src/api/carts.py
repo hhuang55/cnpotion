@@ -50,8 +50,8 @@ def search_orders(
     query = f"""
         SELECT 
             ci.cart_item_id AS line_item_id,
-            p.name AS item_sku,
-            c.customer_name AS customer_name,
+            p.sku AS item_sku,
+            c.customer_id AS customer_name,
             ci.quantity * p.price AS line_item_total,
             c.created_at AS timestamp
         FROM cart_items ci
@@ -111,14 +111,15 @@ def create_cart(new_cart: Customer):
         result = connection.execute(
             sqlalchemy.text(
                 """
-                INSERT INTO carts (customer_id, customer_name)
-                VALUES (:customer_id, :customer_name)
+                INSERT INTO carts (customer_id, customer_name, customer_class)
+                VALUES (:customer_id, :customer_name, :customer_class)
                 RETURNING cart_id
                 """
             ),
             {
                 "customer_id": new_cart.customer_id,
-                "customer_name": new_cart.customer_name
+                "customer_name": new_cart.customer_name,
+                "customer_class": new_cart.character_class
             }
         )
         cart_id = result.scalar_one()
