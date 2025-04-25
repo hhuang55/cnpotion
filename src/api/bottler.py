@@ -132,15 +132,21 @@ def create_bottle_plan(
 
     # def is_basic_potion(r, g, b, d):
     #     return [r, g, b, d] in ([100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100])
+
+
     
 
     for potion in potions:
         r, g, b, d = potion.red_ml, potion.green_ml, potion.blue_ml, potion.dark_ml
         # if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
             # continue
-        
-        if [r, g, b, d] in ([0, 50, 50, 0]): #cyan potion
+        blocked = [[0, 50, 50, 0]]  # Add more blocked patterns if needed
+        if [int(r), int(g), int(b), int(d)] in blocked:
             continue
+        if r + g + b + d == 0:
+            continue
+        #if [r, g, b, d] in ([0, 50, 50, 0]): #cyan potion
+        #    continue
 
 
 
