@@ -139,7 +139,7 @@ def create_bottle_plan(
         # if r + g + b + d == 0 or is_basic_potion(r, g, b, d):
             # continue
         
-        if [r, g, b, d] in ([10, 60, 30, 0], [0, 50, 50, 0]): #skip crafting earth and cyan potion
+        if [r, g, b, d] in ([0, 50, 50, 0]): #cyan potion
             continue
 
 
