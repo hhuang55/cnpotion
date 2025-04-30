@@ -9,6 +9,13 @@ from src.api import auth
 from src import database as db
 import random
 
+from uuid import UUID
+
+import json
+
+
+
+
 router = APIRouter(
     prefix="/barrels",
     tags=["barrels"],
@@ -52,19 +59,11 @@ def calculate_barrel_summary(barrels: List[Barrel]) -> BarrelSummary:
     return BarrelSummary(gold_paid=sum(b.price * b.quantity for b in barrels))
 
 
-@router.post("/deliver/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
-def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
-    """
-    Processes barrels delivered based on the provided order_id. order_id is a unique value representing
-    a single delivery; the call is idempotent based on the order_id.
-    """
-    print(f"barrels delivered: {barrels_delivered} order_id: {order_id}")
-
+@router.post("/deliver/{order_id}", status_code=status.HTTP_200_OK)
+def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: UUID):
     delivery = calculate_barrel_summary(barrels_delivered)
-
     red_ml = green_ml = blue_ml = dark_ml = 0
 
-    
     for barrel in barrels_delivered:
         ml_added = barrel.ml_per_barrel * barrel.quantity
         red_ml += barrel.potion_type[0] * ml_added
@@ -72,35 +71,69 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
         blue_ml += barrel.potion_type[2] * ml_added
         dark_ml += barrel.potion_type[3] * ml_added
 
-
+    response_data = {
+        "status": "ok",
+        "gold_paid": delivery.gold_paid,
+        "ml_added": {
+            "red": red_ml,
+            "green": green_ml,
+            "blue": blue_ml,
+            "dark": dark_ml
+        }
+    }
 
     with db.engine.begin() as connection:
-        row = connection.execute(sqlalchemy.text("SELECT gold FROM global_inventory")).first()
-        if row.gold < delivery.gold_paid:
+        existing = connection.execute(
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
+            {"order_id": str(order_id)}
+        ).fetchone()
+        if existing:
+            return existing.response
+
+        current_gold = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
+        ).scalar_one()
+
+        if current_gold < delivery.gold_paid:
             raise HTTPException(status_code=400, detail="Not enough gold to pay for barrels")
+
+        tx_id = connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO transactions (type, description)
+                VALUES ('delivery', 'Barrel delivery')
+                RETURNING id
+            """)
+        ).scalar_one()
+
+        for resource, amount in [
+            ("gold", -delivery.gold_paid),
+            ("red_ml", int(red_ml)),
+            ("green_ml", int(green_ml)),
+            ("blue_ml", int(blue_ml)),
+            ("dark_ml", int(dark_ml)),
+        ]:
+            if amount != 0:
+                connection.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO entries (transaction_id, resource, amount)
+                        VALUES (:tx_id, :resource, :amount)
+                    """),
+                    {"tx_id": tx_id, "resource": resource, "amount": amount}
+                )
+
         connection.execute(
-            sqlalchemy.text(
-                """
-                UPDATE global_inventory SET 
-
-                gold = gold - :gold_paid,
-                red_ml = red_ml + :red_ml,
-                green_ml = green_ml + :green_ml,
-                blue_ml = blue_ml + :blue_ml,
-                dark_ml = dark_ml + :dark_ml
-                """
-            ),
-            {"gold_paid": delivery.gold_paid,
-              "red_ml": red_ml,
-              "green_ml": green_ml,
-              "blue_ml": blue_ml,
-                "dark_ml": dark_ml
-              }
-
+            sqlalchemy.text("""
+                INSERT INTO requests (order_id, response)
+                VALUES (:order_id, :response)
+            """),
+            {
+                "order_id": str(order_id),
+                "response": json.dumps(response_data)
+            }
         )
-        
 
-    pass
+    return response_data
+
 
 
 def create_barrel_plan(
@@ -211,30 +244,38 @@ def get_wholesale_purchase_plan(wholesale_catalog: List[Barrel]):
     """
     print(f"barrel catalog: {wholesale_catalog}")
 
+
     with db.engine.begin() as connection:
-        row = connection.execute(
-            sqlalchemy.text(
-                """
-                SELECT gold, red_ml, green_ml, blue_ml, dark_ml, ml_capacity
-                FROM global_inventory
-                """
-            )
-        ).one()
+        gold = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
+        ).scalar_one()
 
-        gold = row.gold
-        red_ml = row.red_ml
-        green_ml = row.green_ml
-        blue_ml = row.blue_ml
-        dark_ml = row.dark_ml
-        ml_capacity = row.ml_capacity
+        red_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'red_ml'")
+        ).scalar_one()
 
-    # TODO: fill in values correctly based on what is in your database
+        green_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'green_ml'")
+        ).scalar_one()
+
+        blue_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'blue_ml'")
+        ).scalar_one()
+
+        dark_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'dark_ml'")
+        ).scalar_one()
+
+        ml_capacity = connection.execute(
+            sqlalchemy.text("SELECT ml_capacity FROM global_inventory")
+        ).scalar_one()
+
     return create_barrel_plan(
         gold=gold,
         max_barrel_capacity=10000 * ml_capacity,
-        current_red_ml= red_ml,
-        current_green_ml= green_ml,
-        current_blue_ml= blue_ml,
-        current_dark_ml= dark_ml,
+        current_red_ml=red_ml,
+        current_green_ml=green_ml,
+        current_blue_ml=blue_ml,
+        current_dark_ml=dark_ml,
         wholesale_catalog=wholesale_catalog,
     )

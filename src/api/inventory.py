@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 import sqlalchemy
 from src.api import auth
 from src import database as db
+import json
 
 router = APIRouter(
     prefix="/inventory",
@@ -32,34 +33,32 @@ def get_inventory():
     as errors on potion exchange.
     """
     with db.engine.begin() as connection:
-        row = connection.execute(
-            sqlalchemy.text(
-                """
-                SELECT 
-                    gi.red_ml,
-                    gi.green_ml,
-                    gi.blue_ml,
-                    gi.dark_ml,
-                    gi.gold,
-                    (SELECT SUM(p.amount) FROM potions p) AS totalpot
-                FROM global_inventory gi
-                LIMIT 1
-                """
-            )
-        ).one()
+        total_potions = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM potions")
+        ).scalar_one()
 
-        total_ml = row.red_ml + row.green_ml + row.blue_ml + row.dark_ml
-        total_potions = row.totalpot
+        total_ml = connection.execute(
+            sqlalchemy.text("""
+                SELECT COALESCE(SUM(amount), 0)
+                FROM entries
+                WHERE resource IN ('red_ml', 'green_ml', 'blue_ml', 'dark_ml')
+            """),
+        ).scalar_one()
+
+        gold = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
+        ).scalar_one()
 
     return InventoryAudit(
         number_of_potions=total_potions,
         ml_in_barrels=total_ml,
-        gold=row.gold
+        gold=gold
     )
 
 
 @router.post("/plan", response_model=CapacityPlan)
 def get_capacity_plan():
+
     """
     Provides a daily capacity purchase plan.
 
@@ -67,19 +66,16 @@ def get_capacity_plan():
     - Each additional capacity unit costs 1000 gold.
     """
     with db.engine.begin() as connection:
-        row = connection.execute(
-            sqlalchemy.text(
-                """
-                SELECT gold, potion_capacity, ml_capacity
-                FROM global_inventory
-                LIMIT 1
-                """
-            )
+        gold = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
+        ).scalar_one()
+
+        caps = connection.execute(
+            sqlalchemy.text("SELECT potion_capacity, ml_capacity FROM global_inventory")
         ).first()
 
-        gold = row.gold
-        potion_capacity = row.potion_capacity
-        ml_capacity = row.ml_capacity
+        potion_capacity = caps.potion_capacity
+        ml_capacity = caps.ml_capacity
 
         usable_gold = max(gold - 1000, 0)
         units_available = usable_gold // 1000
@@ -122,44 +118,64 @@ def deliver_capacity_plan(capacity_purchase: CapacityPlan, order_id: int):
     total_cost = (capacity_purchase.potion_capacity + capacity_purchase.ml_capacity) * 1000
 
     with db.engine.begin() as connection:
-        # Optional: check current capacities to avoid exceeding max
-        row = connection.execute(
-            sqlalchemy.text(
-                """
-                SELECT potion_capacity, ml_capacity, gold
-                FROM global_inventory
-                LIMIT 1
-                """
-            )
+        existing = connection.execute(
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
+            {"order_id": str(order_id)}
+        ).fetchone()
+
+        if existing:
+            return existing.response
+
+        gold = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
+        ).scalar_one()
+
+        caps = connection.execute(
+            sqlalchemy.text("SELECT potion_capacity, ml_capacity FROM global_inventory")
         ).first()
 
-        current_potion_capacity = row.potion_capacity
-        current_ml_capacity = row.ml_capacity
-        current_gold = row.gold
-
-        #check limit
-        if current_potion_capacity + capacity_purchase.potion_capacity > 10 or \
-           current_ml_capacity + capacity_purchase.ml_capacity > 10:
+        if caps.potion_capacity + capacity_purchase.potion_capacity > 10 or \
+           caps.ml_capacity + capacity_purchase.ml_capacity > 10:
             raise HTTPException(status_code=400, detail="past the limit 10")
 
-        #check gold
-        if current_gold < total_cost:
+        if gold < total_cost:
             raise HTTPException(status_code=400, detail="not enough gold")
 
-        #update db
+        tx_id = connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO transactions (type, description)
+                VALUES ('capacity', 'Purchased capacity')
+                RETURNING id
+            """),
+        ).scalar_one()
+
         connection.execute(
-            sqlalchemy.text(
-                """
+            sqlalchemy.text("""
+                INSERT INTO entries (transaction_id, resource, amount)
+                VALUES (:tx_id, 'gold', :amount)
+            """),
+            {"tx_id": tx_id, "amount": -total_cost}
+        )
+
+        connection.execute(
+            sqlalchemy.text("""
                 UPDATE global_inventory
                 SET 
                     potion_capacity = potion_capacity + :potions,
-                    ml_capacity = ml_capacity + :ml,
-                    gold = gold - :cost
-                """
-            ),
+                    ml_capacity = ml_capacity + :ml
+            """),
             {
                 "potions": capacity_purchase.potion_capacity,
-                "ml": capacity_purchase.ml_capacity,
-                "cost": total_cost
+                "ml": capacity_purchase.ml_capacity
             }
         )
+
+        connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO requests (order_id, response)
+                VALUES (:order_id, :response)
+            """),
+            {"order_id": str(order_id), "response": json.dumps({"status": "ok"})}
+        )
+
+    return {"status": "ok"}

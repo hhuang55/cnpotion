@@ -50,8 +50,8 @@ def search_orders(
     query = f"""
         SELECT 
             ci.cart_item_id AS line_item_id,
-            p.sku AS item_sku,
-            c.customer_id AS customer_name,
+            p.name AS item_sku,
+            c.customer_name AS customer_name,
             ci.quantity * p.price AS line_item_total,
             c.created_at AS timestamp
         FROM cart_items ci
@@ -190,11 +190,25 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
             total_potions_bought += item.quantity
             total_gold_paid += item.price * item.quantity
 
+        # insert transaction
+        tx_id = connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO transactions (type, description)
+                VALUES ('checkout', 'Cart checkout')
+                RETURNING id
+            """)
+        ).scalar_one()
+
+        # record gold spent in ledger
         connection.execute(
-            sqlalchemy.text("UPDATE global_inventory SET gold = gold + :gold"),
-            {"gold": total_gold_paid}
+            sqlalchemy.text("""
+                INSERT INTO entries (transaction_id, resource, amount)
+                VALUES (:tx_id, 'gold', :amount)
+            """),   
+            {"tx_id": tx_id, "amount": total_gold_paid}
         )
 
+        # - potions from inventory
         for item in cart_items:
             connection.execute(
                 sqlalchemy.text("""
@@ -203,18 +217,13 @@ def checkout(cart_id: int, cart_checkout: CartCheckout):
                 {"qty": item.quantity, "sku": item.potion_sku}
             )
 
-        # clear cart
-        #connection.execute(
-        #    sqlalchemy.text("DELETE FROM cart_items WHERE cart_id = :cart_id"),
-        #    {"cart_id": cart_id}
-        #)
-
-        #true if checkedout from cart
+        # mark cart as checked out
         connection.execute(
-        sqlalchemy.text("UPDATE carts SET checked_out = true WHERE cart_id = :cart_id"),
-        {"cart_id": cart_id}
-)
-
+            sqlalchemy.text("""
+                UPDATE carts SET checked_out = true WHERE cart_id = :cart_id
+            """),
+            {"cart_id": cart_id}
+        )
 
     return CheckoutResponse(
         total_potions_bought=total_potions_bought,

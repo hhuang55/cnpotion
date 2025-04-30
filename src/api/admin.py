@@ -18,29 +18,45 @@ def reset():
     """
 
     with db.engine.begin() as connection:
-        # Reset global inventory
+        # Reset capacity in global_inventory only
         connection.execute(
-            sqlalchemy.text(
-                """
-                UPDATE global_inventory SET 
-                gold = 100,
-                red_ml = 0,
-                green_ml = 0,
-                blue_ml = 0,
-                dark_ml = 0,
-                potion_capacity = 1,
-                ml_capacity = 1
-                """
-            )
+            sqlalchemy.text("""
+                UPDATE global_inventory
+                SET potion_capacity = 1, ml_capacity = 1
+            """)
         )
 
-        # clear potion inventory
+        # Clear potions
         connection.execute(sqlalchemy.text("UPDATE potions SET amount = 0"))
 
-        # clear cart data
+        # Clear carts
         connection.execute(sqlalchemy.text("DELETE FROM cart_items"))
         connection.execute(sqlalchemy.text("DELETE FROM carts"))
 
+        # Clear ledger + add baseline transaction
+        connection.execute(sqlalchemy.text("DELETE FROM entries"))
+        connection.execute(sqlalchemy.text("DELETE FROM transactions"))
+
+        tx_id = connection.execute(sqlalchemy.text("""
+            INSERT INTO transactions (type, description)
+            VALUES ('reset', 'Reset game state')
+            RETURNING id
+        """)).scalar_one()
+
+        base_entries = [
+            ("gold", 100),
+            ("red_ml", 0),
+            ("green_ml", 0),
+            ("blue_ml", 0),
+            ("dark_ml", 0),
+        ]
+
+        for resource, amount in base_entries:
+            connection.execute(sqlalchemy.text("""
+                INSERT INTO entries (transaction_id, resource, amount)
+                VALUES (:tx_id, :resource, :amount)
+            """), {"tx_id": tx_id, "resource": resource, "amount": amount})
 
     return
+
 

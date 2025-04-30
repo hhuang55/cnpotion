@@ -7,6 +7,9 @@ from src.api import auth
 import sqlalchemy
 from src import database as db
 
+from uuid import UUID
+import json
+
 router = APIRouter(
     prefix="/bottler",
     tags=["bottler"],
@@ -33,8 +36,8 @@ class PotionMixes(BaseModel):
         return potion_type
 
 
-@router.post("/deliver/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
-def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
+@router.post("/deliver/{order_id}", status_code=status.HTTP_200_OK)
+def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: UUID):
     print(f"potions delivered: {potions_delivered} order_id: {order_id}")
 
     used_red = used_green = used_blue = used_dark = 0
@@ -46,27 +49,52 @@ def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
         used_blue += b * pot.quantity
         used_dark += d * pot.quantity
 
-    with db.engine.begin() as connection:
-        # Subtract used ml
-        connection.execute(
-            sqlalchemy.text(
-                """
-                UPDATE global_inventory SET 
-                red_ml = red_ml - :usedred,
-                green_ml = green_ml - :usedgreen,
-                blue_ml = blue_ml - :usedblue,
-                dark_ml = dark_ml - :useddark
-                """
-            ),
-            {
-                "usedred": used_red,
-                "usedgreen": used_green,
-                "usedblue": used_blue,
-                "useddark": used_dark,
-            },
-        )
+    response_data = {
+        "status": "ok",
+        "ml_used": {
+            "red": used_red,
+            "green": used_green,
+            "blue": used_blue,
+            "dark": used_dark
+        }
+    }
 
-        # Update potion amounts
+    with db.engine.begin() as connection:
+        # Idempotency check
+        existing = connection.execute(
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
+            {"order_id": str(order_id)}
+        ).fetchone()
+
+        if existing:
+            return existing.response
+
+        # Record transaction
+        tx_id = connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO transactions (type, description)
+                VALUES ('bottle', 'Bottled potions')
+                RETURNING id
+            """)
+        ).scalar_one()
+
+        # Ledger entries for ml usage
+        for resource, amount in [
+            ("red_ml", -used_red),
+            ("green_ml", -used_green),
+            ("blue_ml", -used_blue),
+            ("dark_ml", -used_dark),
+        ]:
+            if amount != 0:
+                connection.execute(
+                    sqlalchemy.text("""
+                        INSERT INTO entries (transaction_id, resource, amount)
+                        VALUES (:tx_id, :resource, :amount)
+                    """),
+                    {"tx_id": tx_id, "resource": resource, "amount": amount}
+                )
+
+        # Update potions table
         for pot in potions_delivered:
             r, g, b, d = pot.potion_type
             connection.execute(
@@ -85,6 +113,17 @@ def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
                     "d": d,
                 },
             )
+
+        connection.execute(
+            sqlalchemy.text("""
+                INSERT INTO requests (order_id, response)
+                VALUES (:order_id, :response)
+            """),
+            {"order_id": str(order_id), "response": json.dumps(response_data)}
+        )
+
+    return response_data
+
 
 
 
@@ -232,25 +271,31 @@ def get_bottle_plan():
     """
 
     with db.engine.begin() as connection:
-        result = connection.execute(
-            sqlalchemy.text("""
-                SELECT red_ml, green_ml, blue_ml, dark_ml, potion_capacity 
-                FROM global_inventory
-            """)
-        ).first()
+        # ml values from ledger
+        red_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'red_ml'")
+        ).scalar_one()
+        green_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'green_ml'")
+        ).scalar_one()
+        blue_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'blue_ml'")
+        ).scalar_one()
+        dark_ml = connection.execute(
+            sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'dark_ml'")
+        ).scalar_one()
 
-        # calculate total potions
+        # potion_capacity still from global_inventory
+        potion_capacity = connection.execute(
+            sqlalchemy.text("SELECT potion_capacity FROM global_inventory")
+        ).scalar_one()
+
+        # total potions
         total_potions = connection.execute(
             sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM potions")
         ).scalar_one()
 
-        red_ml = result.red_ml
-        green_ml = result.green_ml
-        blue_ml = result.blue_ml
-        dark_ml = result.dark_ml
-        potion_capacity = result.potion_capacity
-
-        # remaining potion slots
+        # remaining capacity
         remaining_capacity = max(0, 50 * potion_capacity - total_potions)
 
     return create_bottle_plan(
