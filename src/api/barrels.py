@@ -60,7 +60,7 @@ def calculate_barrel_summary(barrels: List[Barrel]) -> BarrelSummary:
 
 
 @router.post("/deliver/{order_id}", status_code=status.HTTP_200_OK)
-def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: UUID):
+def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
     delivery = calculate_barrel_summary(barrels_delivered)
     red_ml = green_ml = blue_ml = dark_ml = 0
 

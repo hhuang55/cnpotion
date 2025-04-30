@@ -37,7 +37,7 @@ class PotionMixes(BaseModel):
 
 
 @router.post("/deliver/{order_id}", status_code=status.HTTP_200_OK)
-def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: UUID):
+def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
     print(f"potions delivered: {potions_delivered} order_id: {order_id}")
 
     used_red = used_green = used_blue = used_dark = 0
