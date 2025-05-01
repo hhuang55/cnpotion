@@ -118,10 +118,12 @@ def deliver_capacity_plan(capacity_purchase: CapacityPlan, order_id: int):
     total_cost = (capacity_purchase.potion_capacity + capacity_purchase.ml_capacity) * 1000
 
     with db.engine.begin() as connection:
+        source = "inventory"
         existing = connection.execute(
-            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
-            {"order_id": str(order_id)}
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id AND source = :source"),
+            {"order_id": str(order_id), "source": source}
         ).fetchone()
+
 
         if existing:
             return json.loads(existing.response)
@@ -172,10 +174,10 @@ def deliver_capacity_plan(capacity_purchase: CapacityPlan, order_id: int):
 
         connection.execute(
             sqlalchemy.text("""
-                INSERT INTO requests (order_id, response)
-                VALUES (:order_id, :response)
+                INSERT INTO requests (order_id, source, response)
+                VALUES (:order_id, :source, :response)
             """),
-            {"order_id": str(order_id), "response": json.dumps({"status": "ok"})}
+            {"order_id": str(order_id), "source": source, "response": json.dumps({"status": "ok"})}
         )
 
     return {"status": "ok"}

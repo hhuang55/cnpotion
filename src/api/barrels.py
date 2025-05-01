@@ -62,6 +62,7 @@ def calculate_barrel_summary(barrels: List[Barrel]) -> BarrelSummary:
 @router.post("/deliver/{order_id}", status_code=status.HTTP_200_OK)
 def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
     delivery = calculate_barrel_summary(barrels_delivered)
+    source = "barrels"
     red_ml = green_ml = blue_ml = dark_ml = 0
 
     for barrel in barrels_delivered:
@@ -84,9 +85,10 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
 
     with db.engine.begin() as connection:
         existing = connection.execute(
-            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
-            {"order_id": order_id}
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id AND source = :source"),
+            {"order_id": order_id, "source": source}
         ).fetchone()
+
         if existing:
             return json.loads(existing.response)
 
@@ -123,14 +125,16 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
 
         connection.execute(
             sqlalchemy.text("""
-                INSERT INTO requests (order_id, response)
-                VALUES (:order_id, :response)
+                INSERT INTO requests (order_id, source, response)
+                VALUES (:order_id, :source, :response)
             """),
             {
-                "order_id": order_id,  # ← keep as int
+                "order_id": order_id,
+                "source": source,
                 "response": json.dumps(response_data)
             }
         )
+
 
     return response_data
 

@@ -60,11 +60,12 @@ def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
     }
 
     with db.engine.begin() as connection:
-        # Idempotency check
+        source = "bottler"
         existing = connection.execute(
-            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
-            {"order_id": str(order_id)}
+            sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id AND source = :source"),
+            {"order_id": order_id, "source": source}
         ).fetchone()
+
 
         if existing:
             return json.loads(existing.response)
@@ -116,11 +117,12 @@ def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
 
         connection.execute(
             sqlalchemy.text("""
-                INSERT INTO requests (order_id, response)
-                VALUES (:order_id, :response)
+                INSERT INTO requests (order_id, source, response)
+                VALUES (:order_id, :source, :response)
             """),
-            {"order_id": str(order_id), "response": json.dumps(response_data)}
+            {"order_id": order_id, "source": source, "response": json.dumps(response_data)}
         )
+
 
     return response_data
 
