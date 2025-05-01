@@ -67,7 +67,7 @@ def post_deliver_bottles(potions_delivered: List[PotionMixes], order_id: int):
         ).fetchone()
 
         if existing:
-            return existing.response
+            return json.loads(existing.response)
 
         # Record transaction
         tx_id = connection.execute(

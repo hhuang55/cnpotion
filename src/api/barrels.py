@@ -85,10 +85,10 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
     with db.engine.begin() as connection:
         existing = connection.execute(
             sqlalchemy.text("SELECT response FROM requests WHERE order_id = :order_id"),
-            {"order_id": str(order_id)}
+            {"order_id": order_id}
         ).fetchone()
         if existing:
-            return existing.response
+            return json.loads(existing.response)
 
         current_gold = connection.execute(
             sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
@@ -127,7 +127,7 @@ def post_deliver_barrels(barrels_delivered: List[Barrel], order_id: int):
                 VALUES (:order_id, :response)
             """),
             {
-                "order_id": str(order_id),
+                "order_id": order_id,  # ← keep as int
                 "response": json.dumps(response_data)
             }
         )

@@ -124,7 +124,7 @@ def deliver_capacity_plan(capacity_purchase: CapacityPlan, order_id: int):
         ).fetchone()
 
         if existing:
-            return existing.response
+            return json.loads(existing.response)
 
         gold = connection.execute(
             sqlalchemy.text("SELECT COALESCE(SUM(amount), 0) FROM entries WHERE resource = 'gold'")
