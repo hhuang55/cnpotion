@@ -159,7 +159,7 @@ def create_barrel_plan(
     current_ml = [current_red_ml, current_green_ml, current_blue_ml, current_dark_ml]
 
     while True:
-        # compute how much we need per color
+        # compute how much is needed per color
         needed_ml = [max(0, target_per_color - amt) for amt in current_ml]
 
         # stop if nothing is needed
