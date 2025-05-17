@@ -75,41 +75,52 @@ When customers are most active and what they’re buying at those times.
 # Step 4: SQL Queries to Help
 
 
-## Potions That Make the Most Gold and Score Well
+## Potions That Make the Most Gold 
 
 
 SELECT
-    p.name,
-    AVG(i.price_per_ml * p.ml_used) AS cost,
-    s.selling_price,
-    (s.selling_price - AVG(i.price_per_ml * p.ml_used)) AS profit,
-    r.value + r.quality + r.reliability + r.recognition AS rating_score,
-    (s.selling_price - AVG(i.price_per_ml * p.ml_used)) * 
-        ((r.value + r.quality + r.reliability + r.recognition) / 20.0) AS adjusted_score
+  p.name,
+  p.price AS potion_price,
+  SUM(ci.quantity) AS total_sold,
+  SUM(ci.quantity * p.price) AS total_gold_earned
 FROM
-    sales s
-JOIN potions p ON s.potion_sku = p.sku
-JOIN ingredients i ON p.ingredient_id = i.id
-JOIN ratings r ON p.sku = r.potion_sku
-GROUP BY p.name, s.selling_price, r.value, r.quality, r.reliability, r.recognition
-ORDER BY adjusted_score DESC;
+  cart_items ci
+JOIN carts c ON ci.cart_id = c.cart_id
+JOIN potions p ON ci.potion_sku = p.sku
+WHERE
+  c.checked_out = true
+GROUP BY p.name, p.price
+ORDER BY total_gold_earned DESC;
 
 
-## Brewing vs. Sales Ratio
+
+## Brewed vs. Sold Ratio
 
 SELECT
-    p.sku,
-    COUNT(*) FILTER (WHERE e.type = 'brewed') AS brewed,
-    COUNT(*) FILTER (WHERE e.type = 'sold') AS sold,
-    ROUND(
-        COUNT(*) FILTER (WHERE e.type = 'sold')::decimal / 
-        NULLIF(COUNT(*) FILTER (WHERE e.type = 'brewed'), 0), 2
-    ) AS brew_to_sale_ratio
+  p.sku,
+  COALESCE(brewed.brewed_count, 0) AS brewed,
+  COALESCE(sold.sold_count, 0) AS sold,
+  ROUND(COALESCE(sold.sold_count::decimal, 0) / NULLIF(brewed.brewed_count, 0), 2) AS brew_to_sale_ratio
 FROM
-    entries e
-JOIN potions p ON e.potion_sku = p.sku
-GROUP BY p.sku
-ORDER BY brew_to_sale_ratio DESC;
+  potions p
+LEFT JOIN (
+  SELECT
+    potion_sku,
+    COUNT(*) AS brewed_count
+  FROM entries
+  WHERE resource = 'potion' AND amount > 0
+  GROUP BY potion_sku
+) brewed ON brewed.potion_sku = p.sku
+LEFT JOIN (
+  SELECT
+    ci.potion_sku,
+    SUM(ci.quantity) AS sold_count
+  FROM cart_items ci
+  JOIN carts c ON ci.cart_id = c.cart_id
+  WHERE c.checked_out = true
+  GROUP BY ci.potion_sku
+) sold ON sold.potion_sku = p.sku;
+
 
 
 
@@ -117,23 +128,53 @@ ORDER BY brew_to_sale_ratio DESC;
 ## Potion Sales by Hour
 
 SELECT
-    EXTRACT(HOUR FROM s.timestamp) AS hour,
-    COUNT(*) AS potions_sold,
-    SUM(s.gold_earned) AS revenue
+  EXTRACT(HOUR FROM c.created_at) AS hour,
+  COUNT(*) AS potions_sold,
+  SUM(ci.quantity * p.price) AS revenue
 FROM
-    sales s
+  cart_items ci
+JOIN carts c ON ci.cart_id = c.cart_id
+JOIN potions p ON ci.potion_sku = p.sku
+WHERE
+  c.checked_out = true
 GROUP BY hour
 ORDER BY hour;
+
 
 
 
 ## What Potions Sell Best at What Time
 
 SELECT
-    s.potion_sku,
-    EXTRACT(HOUR FROM s.timestamp) AS hour,
-    COUNT(DISTINCT s.customer_id) AS buyers
+  ci.potion_sku,
+  EXTRACT(HOUR FROM c.created_at) AS hour,
+  COUNT(DISTINCT c.customer_id) AS buyers
 FROM
-    sales s
-GROUP BY s.potion_sku, hour
+  cart_items ci
+JOIN carts c ON ci.cart_id = c.cart_id
+WHERE
+  c.checked_out = true
+GROUP BY ci.potion_sku, hour
 ORDER BY buyers DESC;
+
+
+
+
+## Potion Sale with ratings
+
+
+SELECT
+  p.name,
+  SUM(ci.quantity * p.price) AS total_gold_earned,
+  pr.value + pr.quality + pr.reliability + pr.recognition AS total_rating,
+  ROUND((pr.value + pr.quality + pr.reliability + pr.recognition) / 4.0, 2) AS avg_rating,
+  ROUND(SUM(ci.quantity * p.price) * ((pr.value + pr.quality + pr.reliability + pr.recognition) / 20.0), 2) AS adjusted_score
+FROM
+  cart_items ci
+JOIN carts c ON ci.cart_id = c.cart_id
+JOIN potions p ON ci.potion_sku = p.sku
+JOIN potion_ratings pr ON ci.potion_sku = pr.potion_sku  **(NOTE NO POTION RATING TABLE)**
+WHERE
+  c.checked_out = true
+GROUP BY p.name, pr.value, pr.quality, pr.reliability, pr.recognition
+ORDER BY adjusted_score DESC;
