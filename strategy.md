@@ -98,28 +98,16 @@ ORDER BY total_gold_earned DESC;
 
 SELECT
   p.sku,
-  COALESCE(brewed.brewed_count, 0) AS brewed,
-  COALESCE(sold.sold_count, 0) AS sold,
-  ROUND(COALESCE(sold.sold_count::decimal, 0) / NULLIF(brewed.brewed_count, 0), 2) AS brew_to_sale_ratio
+  p.name,
+  p.quantity AS brewed,
+  COALESCE(SUM(ci.quantity), 0) AS sold,
+  ROUND(COALESCE(SUM(ci.quantity)::decimal, 0) / NULLIF(p.quantity, 0), 2) AS brew_to_sale_ratio
 FROM
   potions p
-LEFT JOIN (
-  SELECT
-    potion_sku,
-    COUNT(*) AS brewed_count
-  FROM entries
-  WHERE resource = 'potion' AND amount > 0
-  GROUP BY potion_sku
-) brewed ON brewed.potion_sku = p.sku
-LEFT JOIN (
-  SELECT
-    ci.potion_sku,
-    SUM(ci.quantity) AS sold_count
-  FROM cart_items ci
-  JOIN carts c ON ci.cart_id = c.cart_id
-  WHERE c.checked_out = true
-  GROUP BY ci.potion_sku
-) sold ON sold.potion_sku = p.sku;
+LEFT JOIN cart_items ci ON ci.potion_sku = p.sku
+LEFT JOIN carts c ON ci.cart_id = c.cart_id AND c.checked_out = true
+GROUP BY p.sku, p.name, p.quantity
+ORDER BY brew_to_sale_ratio DESC;
 
 
 
