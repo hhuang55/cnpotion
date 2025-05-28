@@ -184,7 +184,7 @@ def create_bottle_plan(
         
         #block potions that isnt needed in the db
         #blocked = [[0, 50, 50, 0], [50, 0, 0, 50], [25, 50, 25, 0], [33, 0, 33, 34], [0, 50, 20, 30]]  
-        blocked = [[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100]]
+        #blocked = [[100, 0, 0, 0], [0, 100, 0, 0], [0, 0, 100, 0], [0, 0, 0, 100]]
         if [int(r), int(g), int(b), int(d)] in blocked:
             continue
         if r + g + b + d == 0:
